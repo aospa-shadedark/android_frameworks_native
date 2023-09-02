@@ -583,6 +583,9 @@ SurfaceFlinger::SurfaceFlinger(Factory& factory) : SurfaceFlinger(factory, SkipI
     property_get("debug.sf.dim_in_gamma_in_enhanced_screenshots", value, 0);
     mDimInGammaSpaceForEnhancedScreenshots = atoi(value);
 
+    property_get("debug.sf.defer_refresh_rate_when_off", value, "0");
+    mDeferRefreshRateWhenOff = atoi(value);
+
     mIgnoreHwcPhysicalDisplayOrientation =
             base::GetBoolProperty("debug.sf.ignore_hwc_physical_display_orientation"s, false);
 
@@ -1485,6 +1488,13 @@ void SurfaceFlinger::setDesiredMode(display::DisplayModeRequest desiredMode) {
     if (mQtiSFExtnIntf->qtiIsFpsDeferNeeded(mode.fps.getValue())) {
         return;
     }
+    const auto display = getDisplayDeviceLocked(displayId);
+    if (mDeferRefreshRateWhenOff && display->getPowerMode() == hal::PowerMode::OFF) {
+        ALOGI("%s: deferring because display is powered off", __func__);
+        mLastActiveMode = mode;
+        return;
+    }
+
     using DesiredModeAction = display::DisplayModeController::DesiredModeAction;
     using ResyncToModeOpts = scheduler::Scheduler::ResyncToModeOpts;
 
@@ -6923,6 +6933,17 @@ SurfaceFlinger::setPhysicalDisplayPowerModeAsync(const sp<DisplayDevice>& displa
                                                mScheduler->resyncToHardwareVsync(displayId,
                                                                                  kAllowToEnable,
                                                                                  activeMode.get());
+                                           }
+                                           {
+                                               Mutex::Autolock lock(mStateLock);
+                                               if (mLastActiveMode) {
+                                                   ALOGI("Deferred active mode change pending, applying now");
+                                                   setDesiredMode(
+                                                           {.mode = *mLastActiveMode,
+                                                            .emitEvent = true,
+                                                            .force = true});
+                                                   mLastActiveMode = std::nullopt;
+                                               }
                                            }
 
                                            mVisibleRegionsDirty = true;
