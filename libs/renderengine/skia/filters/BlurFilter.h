@@ -21,6 +21,7 @@
 #include <SkRuntimeEffect.h>
 #include <SkSurface.h>
 
+#include <cstdint>
 #include <string>
 
 #include "../compat/SkiaGpuContext.h"
@@ -87,6 +88,24 @@ private:
     // PenguinOS Liquid Glass: rounded blur regions drawn as a lens with a lit rim
     const sk_sp<SkRuntimeEffect> mLiquidGlassEffect;
     bool mLiquidGlass = false;
+
+    // Liquid Glass's tunable values, read again only once a system property has changed.
+    struct GlassTuning {
+        float band;
+        float clarity;
+        float refraction;
+        float rim;
+        float slabSaturation;
+        float windowSaturation;
+        float slabGain;
+        float windowGain;
+        float slabLift;
+        float windowLift;
+        float edgeClear;
+        float curve;
+    };
+    GlassTuning mTuning{};
+    uint32_t mTuningSerial = UINT32_MAX;
 };
 
 } // namespace skia
